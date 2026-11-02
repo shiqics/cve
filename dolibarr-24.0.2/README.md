@@ -1,0 +1,24 @@
+# Dolibarr 24.0.2 — Security Advisories
+
+Public advisories for vulnerabilities found in Dolibarr ERP & CRM 24.0.2.
+
+| Advisory | Component | Class | Authentication | Severity | Affected |
+|---|---|---|---|---|---|
+| [WebDAV arbitrary file write → unauthenticated RCE](V-01-WebDAV-Arbitrary-File-Write-to-Unauthenticated-RCE-EN.md) | `dav/fileserver.php`, sabre/dav | Auth bypass, missing authorization, path traversal, arbitrary file write, RCE | None | Critical | 24.0.2 |
+
+The advisory was reproduced on a fresh installation of the official 24.0.2 release package
+with only the bundled, stable modules enabled and no security hardening changes. It
+contains the full data flow, annotated source, reproduction steps and proof of concept.
+
+Product: Dolibarr ERP & CRM
+Vendor: Dolibarr project — <https://github.com/Dolibarr/dolibarr>
+Vendor security contact: `security@dolibarr.org`
+
+## Repository layout
+
+```
+dolibarr-24.0.2/
+├── README.md
+├── V-01-WebDAV-Arbitrary-File-Write-to-Unauthenticated-RCE-EN.md
+└── image/                       reference screenshots
+```
